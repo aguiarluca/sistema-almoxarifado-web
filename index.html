@@ -1,1 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; gap: 20px; margin: 20px; }
+    .formulario, .tabela { width: 50%; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, select { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+    input:read-only, select:disabled { background-color: #eee; cursor: not-allowed; }
+    #imagem { margin-top: 10px; text-align: center; }
+    #imagem img { max-width: 150px; margin-bottom: 10px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    table, th, td { border: 1px solid #aaa; }
+    th, td { padding: 6px; text-align: center; }
+    button { margin-top: 12px; padding: 8px; width: 100%; font-size: 14px; cursor: pointer; }
+    button:disabled { cursor: not-allowed; background-color: #ccc; }
+    .tabela td { font-size: 11px; }
+    .tabela th { font-size: 14px; }
+    .dica-campo { font-size: 11px; color: #555; font-weight: normal; }
+    #estoqueStatus { font-weight: bold; margin-top: 5px; text-align: center; }
+    
+    .modal {
+      display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+      width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8);
+      justify-content: center; align-items: center;
+    }
+    .modal-content { margin: auto; display: block; max-width: 80%; max-height: 80%; }
+    .close-modal {
+      position: absolute; top: 15px; right: 35px; color: #f1f1f1;
+      font-size: 40px; font-weight: bold; transition: 0.3s; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <form class="formulario" id="formulario-requisicao">
+    <h3>Formulário de Requisição de Uniformes/EPIs e Suprimentos - RUES</h3>
+    
+    <label>Loja:</label>
+    <select id="loja" onchange="handleLojaChange()"></select>
+    <label>Categoria:</label>
+    <select id="categoria" onchange="handleCategoriaChange()"></select>
+    <label>Nome:</label>
+    <input type="text" id="nome" oninput="this.value = this.value.toUpperCase();">
+    <small class="dica-campo">Preencher com o nome do colaborador que utilizará o Uniforme e/ou EPI. Em caso de Suprimento ou Insumo, o campo será preenchido automaticamente.</small>
+    <label>CPF / CNPJ:</label>
+    <input type="text" id="cpf">
+    <small class="dica-campo">Preencher com o CPF do colaborador que utilizará o Uniforme e/ou EPI. Em caso de Suprimento ou Insumo, o campo será preenchido automaticamente.</small>
+
+    <div id="campoFinalidade" style="display:none; margin-top:10px;">
+      <label>Finalidade:</label>
+      <select id="finalidade" onchange="atualizarTabelaEPrevisao()">
+        <option value="">Selecione</option>
+        <option value="FUNCIONÁRIO(A) NOVO">FUNCIONÁRIO(A) NOVO</option>
+        <option value="REPOSIÇÃO PARA FUNCIONÁRIO(A) ANTIGO">REPOSIÇÃO PARA FUNCIONÁRIO(A) ANTIGO</option>
+      </select>
+    </div>
+    <div id="campoEmailEscritorio" style="display:none; margin-top:10px;">
+      <label>Digite seu e-mail para receber o pedido:</label>
+      <input type="email" id="emailEscritorio">
+    </div>
+
+    <label>Setor:</label>
+    <select id="setor" onchange="filtrarItens()"></select>
+    <label>Item:</label>
+    <select id="item" onchange="mostrarDetalhesItem()"></select>
+    <label>Gramatura:</label>
+    <input type="text" id="gramatura" readonly>
+    <label>Quantidade:</label>
+    <input type="number" id="qtd" min="1" value="1">
+    <div id="imagem"></div>
+    <div id="estoqueStatus"></div>
+    <button type="button" id="btnAdicionar" onclick="adicionarItem()">Adicionar Item ao Pedido</button>
+  </form>
+
+  <div class="tabela">
+    <h3>Itens do Pedido</h3>
+    <table id="tabelaPedido">
+      <thead>
+        <tr>
+          <th>Categoria</th> <th>Setor</th> <th>Cód_Item</th> <th>Item</th>
+          <th>Gramatura</th> <th>Qtd</th> <th>Custo</th> <th>Custo Total</th> <th>Excluir</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p><strong>Total de Itens:</strong> <span id="totalItens">0</span></p>
+    <p><strong>Custo Total:</strong> R$ <span id="totalCusto">0.00</span></p>
+    <p id="previsaoContainer" style="display: none;">
+      <strong>Previsão de Entrega:</strong> <span id="previsaoData"></span>
+    </p>
+    <button id="btnEnviar" onclick="enviarPedido()">Enviar Pedido</button>
+  </div>
+
+  <div id="modalImagem" class="modal" onclick="this.style.display='none'">
+    <span class="close-modal">&times;</span>
+    <img class="modal-content" id="imgAmpliada">
+  </div>
+
+  <script>
+    let baseDados = [];
+    let listaPedido = [];
+    const categoriasExclusivas = ["SUPRIMENTO", "INSUMO"];
+
+    function handleLojaChange() {
+      const loja = document.getElementById("loja").value;
+      const categoria = document.getElementById("categoria").value.toUpperCase();
+      document.getElementById("campoEmailEscritorio").style.display = (loja.toUpperCase() === "ESCRITÓRIO" ? "block" : "none");
+      if (categoriasExclusivas.includes(categoria)) autoPreencherSuprimento();
+    }
+
+    function handleCategoriaChange() {
+      const categoriaSelect = document.getElementById("categoria");
+      const novaCategoria = categoriaSelect.value; 
+
+      if (!validarMisturaCategoria(novaCategoria)) {
+          categoriaSelect.value = listaPedido.length > 0 ? listaPedido[0].categoria : ""; 
+          return;
+      }
+      
+      const novaCategoriaUpper = novaCategoria.toUpperCase();
+      document.getElementById("campoFinalidade").style.display = (novaCategoriaUpper === "UNIFORMES" || novaCategoriaUpper === "EPI'S" ? "block" : "none");
+      if (categoriasExclusivas.includes(novaCategoriaUpper)) autoPreencherSuprimento();
+      else resetarCamposColaborador();
+      filtrarSetores();
+    }
+    
+    function autoPreencherSuprimento() {
+      const loja = document.getElementById("loja").value;
+      if (!loja) { resetarCamposColaborador(); return; }
+      google.script.run
+        .withSuccessHandler(detalhes => {
+          if (detalhes) {
+            const nomeInput = document.getElementById("nome"), cpfInput = document.getElementById("cpf");
+            nomeInput.value = detalhes.nome || ''; nomeInput.readOnly = true;
+            cpfInput.value = detalhes.cpf_cnpj || ''; cpfInput.readOnly = true;
+            cpfInput.removeAttribute('maxlength');
+          } else resetarCamposColaborador();
+        })
+        .getDetalhesLoja(loja);
+    }
+
+    function resetarCamposColaborador() {
+      if (listaPedido.length === 0) {
+        const nomeInput = document.getElementById("nome"), cpfInput = document.getElementById("cpf");
+        nomeInput.value = ''; nomeInput.readOnly = false;
+        cpfInput.value = ''; cpfInput.readOnly = false;
+        cpfInput.setAttribute('maxlength', '11');
+      }
+    }
+    
+    function travarCamposPrincipais(travar) {
+        document.getElementById("loja").disabled = travar;
+        document.getElementById("nome").readOnly = travar;
+        document.getElementById("cpf").readOnly = travar;
+        document.getElementById("finalidade").disabled = travar;
+        document.getElementById("emailEscritorio").readOnly = travar;
+    }
+
+    function carregarDadosIniciais() {
+      google.script.run.withSuccessHandler(dados => {
+        baseDados = dados;
+        preencherSelect("categoria", dados.map(l => l.categoria));
+      }).getItensComEstoque();
+      google.script.run.withSuccessHandler(lojas => preencherSelect("loja", lojas)).getLojas();
+    }
+    
+    function preencherSelect(id, valores) {
+      const select = document.getElementById(id);
+      select.innerHTML = '<option value="">Selecione</option>';
+      [...new Set(valores)].forEach(v => {
+        const option = document.createElement("option");
+        option.value = v; option.textContent = v;
+        select.appendChild(option);
+      });
+    }
+
+    function filtrarSetores() {
+      const categoria = document.getElementById("categoria").value;
+      preencherSelect("setor", baseDados.filter(l => l.categoria === categoria).map(l => l.setor));
+      filtrarItens();
+    }
+
+    function filtrarItens() {
+      const categoria = document.getElementById("categoria").value;
+      const setor = document.getElementById("setor").value;
+      preencherSelect("item", baseDados.filter(l => l.categoria === categoria && l.setor === setor).map(l => l.itemDesc));
+      mostrarDetalhesItem();
+    }
+
+    function mostrarDetalhesItem() {
+      const itemSelecionado = document.getElementById("item").value;
+      const imagemDiv = document.getElementById("imagem");
+      const gramaturaInput = document.getElementById("gramatura");
+      const estoqueStatusDiv = document.getElementById("estoqueStatus");
+      const btnAdicionar = document.getElementById("btnAdicionar");
+
+      imagemDiv.innerHTML = ""; gramaturaInput.value = ""; estoqueStatusDiv.innerHTML = "";
+      btnAdicionar.disabled = true;
+      
+      const dado = baseDados.find(r => r.itemDesc === itemSelecionado);
+      if (dado) {
+        if (dado.imagem) {
+          const img = document.createElement('img');
+          img.src = dado.imagem; img.alt = "Imagem do item";
+          img.onclick = () => {
+            document.getElementById('modalImagem').style.display = 'flex';
+            document.getElementById('imgAmpliada').src = img.src;
+          };
+          imagemDiv.appendChild(img);
+        }
+        let detalhes = `<strong>Custo:</strong> R$ ${parseFloat(dado.custo).toFixed(2)}<br><strong>Gramatura:</strong> ${dado.gramatura}`;
+        const detalhesP = document.createElement('p');
+        detalhesP.innerHTML = detalhes;
+        imagemDiv.appendChild(detalhesP);
+        gramaturaInput.value = dado.gramatura;
+
+        if (dado.estoque > 0) {
+          estoqueStatusDiv.textContent = `Estoque Atual: ${dado.estoque}`;
+          estoqueStatusDiv.style.color = 'green';
+          btnAdicionar.disabled = false;
+        } else {
+          estoqueStatusDiv.textContent = 'Item Indisponível';
+          estoqueStatusDiv.style.color = 'red';
+          btnAdicionar.disabled = true;
+        }
+      }
+    }
+
+    function validarMisturaCategoria(novaCategoria) {
+        if (listaPedido.length === 0 || !novaCategoria) {
+            return true;
+        }
+
+        const novaCategoriaUpper = novaCategoria.toUpperCase();
+        const categoriasNoPedido = [...new Set(listaPedido.map(i => i.categoria.toUpperCase()))];
+        const categoriaExistentePrincipal = categoriasNoPedido[0];
+
+        const novaEhExclusiva = categoriasExclusivas.includes(novaCategoriaUpper);
+        const existenteEhExclusiva = categoriasExclusivas.includes(categoriaExistentePrincipal);
+
+        if (novaEhExclusiva) {
+            if (categoriaExistentePrincipal !== novaCategoriaUpper) {
+                alert(`A categoria "${novaCategoria}" não pode ser misturada com "${listaPedido[0].categoria}". Esvazie o pedido para continuar.`);
+                return false;
+            }
+        } 
+        else {
+            if (existenteEhExclusiva) {
+                alert(`Não é possível adicionar "${novaCategoria}" a um pedido de "${listaPedido[0].categoria}". Esvazie o pedido para continuar.`);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
+    function adicionarItem() {
+      const categoria = document.getElementById("categoria").value;
+      
+      if (!validarMisturaCategoria(categoria)) {
+        return;
+      }
+
+      const qtd = parseFloat(document.getElementById("qtd").value);
+      const item = document.getElementById("item").value;
+      const dadosItem = baseDados.find(l => l.itemDesc === item);
+
+      if (!item || !qtd || qtd <= 0) {
+        alert("Selecione um item e uma quantidade válida (maior que zero)."); return;
+      }
+      
+      let qtdJaNoPedido = 0;
+      listaPedido.forEach(itemNoPedido => {
+        if (itemNoPedido.item === item) {
+          qtdJaNoPedido += itemNoPedido.qtd;
+        }
+      });
+
+      if ((qtd + qtdJaNoPedido) > dadosItem.estoque) {
+        alert(`Quantidade solicitada (${qtd}) excede o estoque disponível (${dadosItem.estoque - qtdJaNoPedido} restante(s)).`);
+        return;
+      }
+      
+      listaPedido.push({
+        categoria, setor: document.getElementById("setor").value, qtd, custo: dadosItem.custo,
+        cod_item: dadosItem.cod_item, item: dadosItem.itemDesc, gramatura: dadosItem.gramatura,
+        custo_total: dadosItem.custo * qtd
+      });
+      
+      atualizarTabelaEPrevisao();
+      travarCamposPrincipais(true);
+    }
+
+    function removerItem(index) {
+      listaPedido.splice(index, 1);
+      atualizarTabelaEPrevisao();
+      if (listaPedido.length === 0) {
+        travarCamposPrincipais(false);
+        const categoriaAtual = document.getElementById("categoria").value.toUpperCase();
+        if (categoriasExclusivas.includes(categoriaAtual)) {
+            resetarCamposColaborador();
+        }
+      }
+    }
+
+    function atualizarTabelaEPrevisao() {
+      const tbody = document.querySelector("#tabelaPedido tbody");
+      tbody.innerHTML = "";
+      let totalItens = 0, totalCusto = 0;
+      listaPedido.forEach((item, i) => {
+        totalItens += item.qtd;
+        totalCusto += item.custo_total;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${item.categoria}</td><td>${item.setor}</td><td>${item.cod_item}</td><td>${item.item}</td><td>${item.gramatura}</td><td>${item.qtd}</td><td>R$ ${item.custo.toFixed(2)}</td><td>R$ ${item.custo_total.toFixed(2)}</td><td><button onclick="removerItem(${i})">🗑️</button></td>`;
+        tbody.appendChild(tr);
+      });
+      document.getElementById("totalItens").textContent = totalItens;
+      document.getElementById("totalCusto").textContent = totalCusto.toFixed(2);
+      
+      const previsaoContainer = document.getElementById('previsaoContainer');
+      if (listaPedido.length > 0) {
+        previsaoContainer.style.display = 'block';
+        const categoria = listaPedido[0].categoria;
+        const finalidade = document.getElementById('finalidade').value;
+        google.script.run.withSuccessHandler(data => { document.getElementById('previsaoData').textContent = data; }).calcularPrevisaoEntrega(categoria, finalidade);
+      } else {
+        previsaoContainer.style.display = 'none';
+      }
+    }
+
+    function limparFormularioCompleto() {
+      document.getElementById("formulario-requisicao").reset();
+      listaPedido = [];
+      atualizarTabelaEPrevisao();
+      travarCamposPrincipais(false);
+      resetarCamposColaborador();
+      handleLojaChange();
+      handleCategoriaChange();
+    }
+
+    function enviarPedido() {
+      const loja = document.getElementById("loja").value;
+      const nome = document.getElementById("nome").value.trim();
+      const cpf = document.getElementById("cpf").value.trim();
+      const finalidade = document.getElementById("finalidade").value;
+      const emailManual = document.getElementById("emailEscritorio").value.trim();
+      
+      if (!loja || !nome || !cpf || listaPedido.length === 0) {
+        alert("Todos os campos de cabeçalho e pelo menos um item no pedido são obrigatórios."); return;
+      }
+
+      const categoriasNoPedido = [...new Set(listaPedido.map(i => i.categoria.toUpperCase()))];
+      const temCategoriaExclusiva = categoriasNoPedido.some(c => categoriasExclusivas.includes(c));
+
+      if (!temCategoriaExclusiva && !/^\d{11}$/.test(cpf)) {
+        alert("CPF inválido. Insira os 11 números, sem pontos ou traços."); return;
+      }
+      if ((categoriasNoPedido.includes('UNIFORMES') || categoriasNoPedido.includes('EPI\'S')) && !finalidade) {
+        alert("Selecione a finalidade (Funcionário Novo ou Reposição)."); return;
+      }
+      if (loja.toUpperCase() === 'ESCRITÓRIO' && (!emailManual || !/\S+@\S+\.\S+/.test(emailManual))) {
+        alert("Insira um e-mail válido para pedidos do escritório."); return;
+      }
+
+      const objEnvio = { nome, cpf, loja, itens: listaPedido, finalidade, emailManual };
+      const btn = document.getElementById('btnEnviar');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      
+      google.script.run
+        .withSuccessHandler(retorno => {
+          let msg = `Pedido nº ${retorno.numeroPedido} registrado com sucesso!`;
+          if (retorno.statusEmail && !retorno.statusEmail.includes('sucesso')) {
+             msg += `\n\nAtenção: ${retorno.statusEmail}`;
+          }
+          alert(msg);
+          limparFormularioCompleto();
+          // AJUSTE: Recarrega os dados de estoque após o sucesso.
+          carregarDadosIniciais(); 
+          btn.disabled = false;
+          btn.textContent = 'Enviar Pedido';
+        })
+        .withFailureHandler(err => {
+          alert(`Falha ao enviar o pedido: ${err.message}`);
+          btn.disabled = false;
+          btn.textContent = 'Enviar Pedido';
+        })
+        .registrarPedido(objEnvio);
+    }
+    
+    window.addEventListener('load', carregarDadosIniciais);
+  </script>
+</body>
+</html>
 
