@@ -28,19 +28,22 @@ O setor operava com **zero controle de estoque** e processos manuais (mensagens/
 Abaixo, os registros das principais etapas do fluxo de requisição:
 
 ### 1. Formulário de Requisição (Interface Principal)
-![Tela Principal](images/pagina_inicial - Editado.jpg)
+![Tela Principal](images/pagina_inicial-Editado.jpg)
+
 *Interface desenvolvida em HTML/CSS com seletores dinâmicos por categoria e loja.*
 
 ### 2. Carrinho e Validação de Estoque
-![Carrinho de Itens](images/appweb - Editado.png)
+![Carrinho de Itens](images/appweb-Editado.jpg)
+
 *Sistema de validação que impede a adição de itens sem saldo positivo no banco de dados.*
 
-### 3. Automação e Protocolo (Output)
-![E-mail e PDF](images/mensagem - Editado.png)
-*Mensagem confirmando o pedido com o numero de pedido gerado.*
+### 3. Confirmação de Transação e Rastreabilidade
+![Mensagem de confirmação](images/mensagem-Editado.jpg)
 
-### 3. Automação e Protocolo (Output)
-![E-mail e PDF](images/mensagem - Editado.png)
-*Mensagem confirmando o pedido com o numero de pedido gerado.*
+*Notificação automática enviada ao usuário, garantindo a confirmação do pedido e fornecendo o **número de protocolo exclusivo** para rastreio.*
 
+### 4. Protocolo Formal e Compliance (Output em PDF)
+![Formulário PDF](images/formulario-Editado.jpg)
+
+*Documento de conferência gerado dinamicamente. Padroniza a entrega física e serve como **registro de auditoria** para a gestão logística.*
 
