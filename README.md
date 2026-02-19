@@ -24,3 +24,19 @@ O setor operava com **zero controle de estoque** e processos manuais (mensagens/
 * **Redução de Estoque:** Otimização do capital imobilizado e eliminação de perdas operacionais.
 * **Gestão de Custos:** Visibilidade total dos usuários e setores que geram maiores despesas.
 * **Eficiência Operacional:** Estancamento de falhas na separação e formalização 100% digital dos processos.
+
+Abaixo, os registros das principais etapas do fluxo de requisição:
+
+### 1. Formulário de Requisição (Interface Principal)
+![Tela Principal](images/formulario.png)
+*Interface desenvolvida em HTML/CSS com seletores dinâmicos por categoria e loja.*
+
+### 2. Carrinho e Validação de Estoque
+![Carrinho de Itens](images/carrinho.png)
+*Sistema de validação que impede a adição de itens sem saldo positivo no banco de dados.*
+
+### 3. Automação e Protocolo (Output)
+![E-mail e PDF](images/email_recebido.png)
+*Exemplo do e-mail automatizado enviado ao usuário com o protocolo de recebimento em PDF anexo.*
+
+
